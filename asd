@@ -33,7 +33,7 @@ local MainTab = Window:CreateTab({
     Name = "Main",
     Icon = "home",
     ImageSource = "Material",
-    ShowTitle = true -- This will determine whether the big header text in the tab will show
+    ShowTitle = true
 })
 
 -- ===== Float Quantum =====
@@ -52,7 +52,6 @@ local LOOK_DOWN_THRESHOLD = -0.4
 local FLY_POWER = 60
 local MIN_MOVE_MAG = 0.1
 
--- Estado
 local active = false
 local usingClone = false
 local currentCloneModel = nil
@@ -62,7 +61,6 @@ local function getCamera()
     local sign = workspace:GetPropertyChangedSignal("CurrentCamera")
     local cam = workspace.CurrentCamera
     if cam then return cam end
-    -- esperar hasta que aparezca
     local t0 = tick()
     while not workspace.CurrentCamera and tick() - t0 < 5 do
         sign:Wait()
@@ -130,7 +128,6 @@ local function positionCloneUnderPlayer(cloneModel)
 end
 
 local function flightLoop()
-    -- actualizar Camera cada vez por si cambia
     Camera = getCamera()
     while active and usingClone and currentCloneModel and currentCloneModel.Parent do
         local char = LocalPlayer.Character
@@ -145,10 +142,8 @@ local function flightLoop()
                 local camLookY = (Camera and Camera.CFrame and Camera.CFrame.LookVector.Y) or hrp.CFrame.LookVector.Y
                 if moveMag > MIN_MOVE_MAG then
                     if camLookY > LOOK_UP_THRESHOLD then
-                        -- subir
                         hrp.Velocity = Vector3.new(hrp.Velocity.X, FLY_POWER, hrp.Velocity.Z)
                     elseif camLookY < LOOK_DOWN_THRESHOLD then
-                        -- bajar
                         hrp.Velocity = Vector3.new(hrp.Velocity.X, -FLY_POWER, hrp.Velocity.Z)
                     end
                 end
@@ -162,9 +157,7 @@ local function startUsingClone(cloneModel)
     if not cloneModel then return false end
     currentCloneModel = cloneModel
     usingClone = true
-    -- asegurar que esté posicionado al inicio
     positionCloneUnderPlayer(cloneModel)
-    -- iniciar loop de vuelo en background
     task.spawn(flightLoop)
     return true
 end
@@ -249,7 +242,6 @@ local function clearESP()
     end
 end
 
--- Crea un Billboard con el nombre del jugador
 local function addESP(target)
     if not target.Character then return end
     local hrp = target.Character:FindFirstChild("HumanoidRootPart")
@@ -273,7 +265,6 @@ local function addESP(target)
     txt.Parent = bill
 end
 
--- Actualiza todos los jugadores
 local function updateAllESP()
     clearESP()
     if not playersEnabled then return end
@@ -284,7 +275,6 @@ local function updateAllESP()
     end
 end
 
--- Detectar nuevos jugadores
 Players.PlayerAdded:Connect(function(plr)
     plr.CharacterAdded:Connect(function()
         if playersEnabled then
@@ -323,7 +313,6 @@ local Toggle = MainTab:CreateToggle({
 }, "Toggle")
 
 -- ===== Toggle ESP brainrots =====
---// ✅ Variables seguras y compatibles
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
@@ -332,7 +321,6 @@ local brainrotEnabled = false
 local currentHighlight, currentBillboard, currentTextLabel
 local brainrotConn
 
---// ✅ Conversión de texto a dinero (sin operadores abreviados)
 local function parseMoney(text)
     if not text then return 0 end
     text = tostring(text):upper()
@@ -349,7 +337,6 @@ local function parseMoney(text)
     return num
 end
 
---// ✅ Busca el mejor spawn según el mayor valor
 local function findBestSpawn()
     local bestPart, bestText, bestScore = nil, nil, -math.huge
     for _, desc in workspace:GetDescendants() do
@@ -377,14 +364,12 @@ local function findBestSpawn()
     return bestPart, bestText
 end
 
---// ✅ Limpieza segura
 local function clearBrainrot()
     if currentHighlight then currentHighlight:Destroy() end
     if currentBillboard then currentBillboard:Destroy() end
     currentHighlight, currentBillboard, currentTextLabel = nil, nil, nil
 end
 
---// ✅ Mostrar el mejor spawn
 local function showBestSpawn()
     local part, text = findBestSpawn()
     if not part or not text then return end
@@ -421,7 +406,6 @@ local function showBestSpawn()
     currentTextLabel.Text = "⭐ Best Brainrot: " .. text .. " ⭐"
 end
 
---// ✅ Toggle compatible
 local function toggleBrainrot(value)
     if typeof(value) ~= "boolean" then
         warn("[Brainrot] Valor inválido.")
@@ -511,7 +495,6 @@ local function createLaserGui()
     title.TextSize = 20
     title.Parent = frameL
 
-    -- Botón Comprar & Equipar
     local buyButton = Instance.new("TextButton")
     buyButton.Size = UDim2.new(1, -20, 0, 40)
     buyButton.Position = UDim2.new(0, 10, 0, 50)
@@ -525,7 +508,6 @@ local function createLaserGui()
     local buyCorner = Instance.new("UICorner", buyButton)
     buyCorner.CornerRadius = UDim.new(0, 8)
 
-    -- Botón AutoLaser (Toggle interno)
     local autoButton = Instance.new("TextButton")
     autoButton.Size = UDim2.new(1, -20, 0, 40)
     autoButton.Position = UDim2.new(0, 10, 0, 100)
@@ -539,14 +521,12 @@ local function createLaserGui()
     local autoCorner = Instance.new("UICorner", autoButton)
     autoCorner.CornerRadius = UDim.new(0, 8)
 
-    -- Variables de control del AutoLaser
     local autoLaserEnabled = false
     local circlePart = nil
     local equipLoop = nil
     local detectConn = nil
     local alreadyBought = false
 
-    -- Comprar SOLO UNA VEZ (si el remote existe)
     buyButton.MouseButton1Click:Connect(function()
         if not alreadyBought then
             if RFCoinsShopServiceRequestBuy then
@@ -560,18 +540,15 @@ local function createLaserGui()
         end
     end)
 
-    -- AutoLaser toggle (dentro de la GUI)
     autoButton.MouseButton1Click:Connect(function()
         autoLaserEnabled = not autoLaserEnabled
         if autoLaserEnabled then
             autoButton.Text = "✔ Auto Laser: ON"
             autoButton.BackgroundColor3 = Color3.fromRGB(34, 200, 34)
 
-            -- Asegurar Character/HumanoidRootPart
             Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
             local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
-            -- Crear Area de Deteccion
             if not circlePart then
                 circlePart = Instance.new("Part")
                 circlePart.Shape = Enum.PartType.Cylinder
@@ -584,7 +561,6 @@ local function createLaserGui()
                 circlePart.Parent = workspace
             end
 
-            -- Forzar equipar capa cada frame
             if not equipLoop then
                 equipLoop = RunService.Heartbeat:Connect(function()
                     pcall(function()
@@ -597,7 +573,6 @@ local function createLaserGui()
                 end)
             end
 
-            -- Seguir al jugador y detectar enemigos
             if not detectConn then
                 detectConn = RunService.RenderStepped:Connect(function()
                     if circlePart and autoLaserEnabled then
@@ -649,7 +624,6 @@ function toggleLaserGui(value)
     end
 
     if value then
-        -- Encender / crear GUI si no existe
         if not laserGuiCreated then
             createLaserGui()
         else
@@ -658,7 +632,6 @@ function toggleLaserGui(value)
             end
         end
     else
-        -- Apagar / ocultar GUI
         if laserScreenGui then
             laserScreenGui.Enabled = false
         end
@@ -700,9 +673,6 @@ local function createESPBaseFor(model)
     billboard.Size = UDim2.new(0, 200, 0, 40)
     billboard.StudsOffset = Vector3.new(0, 3.2, 0)
     billboard.AlwaysOnTop = true
-
-    -- Parenting: BillboardGui puede ir como hijo de una BasePart en muchos contextos
-    -- Si da problema, puedes parentearlo a workspace.CurrentCamera o a PlayerGui (según tu caso)
     billboard.Parent = basePart
 
     local label = Instance.new("TextLabel")
@@ -762,14 +732,12 @@ end
 
 local function clearAllBaseESP()
     if type(espBases) ~= "table" then return end
-    -- defensivo: copiamos las keys porque removeBaseESP modifica la tabla
     local keys = {}
     for model,_ in pairs(espBases) do table.insert(keys, model) end
     for _, model in ipairs(keys) do removeBaseESP(model) end
 end
 
--- Esperar Plots de forma segura
-local plots = workspace:FindFirstChild("Plots") or workspace:WaitForChild("Plots", 5) -- espera hasta 5s
+local plots = workspace:FindFirstChild("Plots") or workspace:WaitForChild("Plots", 5)
 if plots then
     plots.ChildAdded:Connect(function(child)
         if espBasesEnabled and child:IsA("Model") then
@@ -821,27 +789,24 @@ local function activarCaidaLenta()
     -- Reducimos la gravedad solo para el cliente
     game:GetService("RunService").Heartbeat:Connect(function()
         if caerLentoActivo and humanoid and humanoid.RootPart then
-            -- Forzar velocidad de caída lenta
             humanoid.RootPart.Velocity = Vector3.new(
                 humanoid.RootPart.Velocity.X,
-                math.clamp(humanoid.RootPart.Velocity.Y, -0.001, 0.001), -- entre -5 y 5 para que caiga despacio
+                math.clamp(humanoid.RootPart.Velocity.Y, -0.001, 0.001),
                 humanoid.RootPart.Velocity.Z
             )
         end
     end)
 end
 
--- Funcion toggle para usar con tu boton
 local function toggleCaidaLenta()
     caerLentoActivo = not caerLentoActivo
     if caerLentoActivo then
-        print("✅ Caída lenta ACTIVADA")
+        print("Caída lenta ACTIVADA")
     else
-        print("❌ Caída lenta DESACTIVADA")
+        print("Caída lenta DESACTIVADA")
     end
 end
 
--- Inicializamos la función de caida lenta
 activarCaidaLenta()
 
 local Toggle = MainTab:CreateToggle({
