@@ -1474,7 +1474,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local player = Players.LocalPlayer
 
--- Config
+-- Configuración
 local GUI_NAME = "DesyncButtonGUI_Quick"
 local BUTTON_NAME = "DesyncButton_Quick"
 local TOOL_NAME = "Quantum Cloner"
@@ -1484,244 +1484,107 @@ local REMOTE_NAME_2 = "RE/QuantumCloner/OnTeleport"
 -- Estado
 local QuantumExecuted = false
 local DesyncButton = nil
-local DesyncToggleState = false -- asignarlo desde el Callback del toggle
+local DesyncToggleState = false
 
--- Logs
+-- Depuración
 local function dbg(...) print("[Desync]", ...) end
-local function dbgFire(...) print("[DesyncFire]", ...) end
 
--- Helper: describe remote
-local function describeRemote(r)
-	if not r then return "nil" end
-	if typeof(r) == "Instance" then
-		local ok, name = pcall(function() return r:GetFullName() end)
-		return ok and name or tostring(r)
-	end
-	return tostring(r)
-end
-
--- Intento robusto de invocar remotes (prueba varios signatures comunes)
-local function safeCallRemote(remote, tool)
-	if not remote then return false, "remote nil" end
-
-	-- Si es Instance
-	if typeof(remote) == "Instance" then
-		-- RemoteEvent
-		if remote:IsA("RemoteEvent") then
-			-- 1) sin args
-			local ok, err = pcall(function() remote:FireServer() end)
-			if ok then return true, "FireServer()" end
-
-			-- 2) con tool
-			local tryArgs = {
-				{tool}, -- table con tool
-				tool,
-				(tool and tool.Name) or nil,
-				tool and tool.Name and {tool.Name} or nil,
-			}
-			for _, arg in ipairs(tryArgs) do
-				local ok2, err2 = pcall(function()
-					if arg == nil then
-						remote:FireServer()
-					elseif type(arg) == "table" then
-						remote:FireServer(unpack(arg))
-					else
-						remote:FireServer(arg)
-					end
-				end)
-				if ok2 then return true, "FireServer(arg probado)" end
-			end
-
-			-- 3) FireServer(tool, name)
-			local ok3, err3 = pcall(function() remote:FireServer(tool, tool and tool.Name) end)
-			if ok3 then return true, "FireServer(tool, tool.Name)" end
-
-			return false, err or "RemoteEvent: no pudo FireServer con args probados"
-		end
-
-		-- RemoteFunction
-		if remote:IsA("RemoteFunction") then
-			local ok, ret = pcall(function() return remote:InvokeServer() end)
-			if ok then return true, "InvokeServer()" end
-
-			local tryArgs = { tool, (tool and tool.Name) or nil }
-			for _, arg in ipairs(tryArgs) do
-				local ok2, res2 = pcall(function()
-					if arg == nil then
-						return remote:InvokeServer()
-					else
-						return remote:InvokeServer(arg)
-					end
-				end)
-				if ok2 then return true, "InvokeServer(arg probado)" end
-			end
-
-			return false, "RemoteFunction: no pudo InvokeServer con args probados"
-		end
-
-		-- Otros Instances: intentar métodos comunes
-		local methods = {"FireServer", "InvokeServer", "Fire", "CallServer"}
-		for _, m in ipairs(methods) do
-			if remote[m] then
-				local ok, err = pcall(function() remote[m](remote) end)
-				if ok then return true, ("invoked method "..m) end
-			end
-		end
-	end
-
-	-- Si es tabla o función (module proxy)
-	if type(remote) == "table" then
-		local methods = {"FireServer", "Fire", "InvokeServer", "Send"}
-		for _, m in ipairs(methods) do
-			if type(remote[m]) == "function" then
-				local ok, _ = pcall(function() remote[m](remote, tool) end)
-				if ok then return true, ("table method "..m.." (tool)") end
-			end
-		end
-	end
-	if type(remote) == "function" then
-		local ok, _ = pcall(function() remote(tool) end)
-		if ok then return true, "called function remote(tool)" end
-	end
-
-	return false, "no callable method found"
-end
-
--- Buscar remotes en la ruta que indicaste (ReplicatedStorage.Packages.Net[...])
+-- Buscar remotes
 local function getRemotes()
 	local rem1, rem2 = nil, nil
-	-- intento principal
 	pcall(function()
 		local packages = ReplicatedStorage:FindFirstChild("Packages")
 		if packages then
 			local netFolder = packages:FindFirstChild("Net")
 			if netFolder then
-				rem1 = netFolder:FindFirstChild(REMOTE_NAME_1) or netFolder:FindFirstChild("RE/UseItem") or netFolder:FindFirstChild("UseItem")
-				rem2 = netFolder:FindFirstChild(REMOTE_NAME_2) or netFolder:FindFirstChild("RE/QuantumCloner/OnTeleport") or netFolder:FindFirstChild("OnTeleport")
+				rem1 = netFolder:FindFirstChild(REMOTE_NAME_1)
+				rem2 = netFolder:FindFirstChild(REMOTE_NAME_2)
 			end
 		end
 	end)
-	-- fallbacks globales
-	if not rem1 then
-		rem1 = ReplicatedStorage:FindFirstChild(REMOTE_NAME_1) or ReplicatedStorage:FindFirstChild("UseItem")
-	end
-	if not rem2 then
-		rem2 = ReplicatedStorage:FindFirstChild(REMOTE_NAME_2) or ReplicatedStorage:FindFirstChild("OnTeleport")
-	end
+	if not rem1 then rem1 = ReplicatedStorage:FindFirstChild(REMOTE_NAME_1) end
+	if not rem2 then rem2 = ReplicatedStorage:FindFirstChild(REMOTE_NAME_2) end
 	return rem1, rem2
 end
 
--- Acción principal: equip -> remote1 -> wait 0.5 -> remote2 -> aplicar fflags inmediatamente
-local function DoDesyncAction()
-	if QuantumExecuted then
-		dbg("DoDesyncAction: ya ejecutado, saliendo.")
-		return false, "already executed"
-	end
-
-	local character = player.Character or player.CharacterAdded:Wait()
-	local backpack = player:FindFirstChild("Backpack") or player:WaitForChild("Backpack")
-	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-
-	-- buscar herramienta (pequeño timeout)
-	local tool = nil
-	local t0 = tick()
-	repeat
-		tool = (backpack and backpack:FindFirstChild(TOOL_NAME)) or (character and character:FindFirstChild(TOOL_NAME))
-		if tool then break end
-		task.wait(0.08)
-	until tick() - t0 > 3
-
-	if not tool then
-		dbg("DoDesyncAction -> herramienta no encontrada:", TOOL_NAME)
-		return false, "tool not found"
-	end
-
-	-- equipar inmediatamente (pcall)
-	pcall(function()
-		if humanoid and humanoid:IsA("Humanoid") then
-			humanoid:EquipTool(tool)
-		end
-	end)
-
-	-- obtener remotes
-	local r1, r2 = getRemotes()
-	dbgFire("Rem1:", describeRemote(r1))
-	dbgFire("Rem2:", describeRemote(r2))
-
-	-- si r1 existe, ejecutarla inmediatamente
-	if r1 then
-		local ok, msg = safeCallRemote(r1, tool)
-		if ok then dbgFire("Rem1 invoked ->", tostring(msg)) else dbgFire("Rem1 fallo ->", tostring(msg)) end
-	else
-		dbgFire("Rem1 no encontrado")
-	end
-
-	-- esperar 0.5 segundos exactamente
-	task.wait(0.5)
-
-	-- ejecutar r2
-	if r2 then
-		local ok2, msg2 = safeCallRemote(r2, tool)
-		if ok2 then dbgFire("Rem2 invoked ->", tostring(msg2)) else dbgFire("Rem2 fallo ->", tostring(msg2)) end
-	else
-		dbgFire("Rem2 no encontrado")
-	end
-
-	-- aplicar fflags inmediatamente (pcall)
-	pcall(function()
-		if type(setfflag) == "function" then
-			-- aplicarlas una detrás de otra inmediatamente
-			pcall(setfflag, "HumanoidParallelProcessing", "False")
-			pcall(setfflag, "HumanoidRootPartPhysicsDisabled", "True")
-			pcall(setfflag, "NetworkOwnershipLagSimulation", "Extreme")
-			dbg("setfflag aplicados (si el executor lo permitió).")
-		else
-			dbg("setfflag no disponible en este entorno.")
-		end
-	end)
-
-	QuantumExecuted = true
-	return true, "Ejecutado correctamente"
+-- Ejecutor remoto seguro
+local function safeCallRemote(remote, tool)
+	if not remote then return false end
+	local ok = pcall(function() remote:FireServer(tool) end)
+	return ok
 end
 
--- GUI: eliminación de antiguas y creación del botón (invisible por defecto)
-local function removeOldGUI()
-	if player and player:FindFirstChild("PlayerGui") then
-		local old = player.PlayerGui:FindFirstChild(GUI_NAME)
-		if old then old:Destroy() end
+-- 🔥 Acción principal (equipar, ejecutar remotes, aplicar desync visual)
+local function DoDesyncAction()
+	if QuantumExecuted then return end
+	QuantumExecuted = true
+
+	local character = player.Character or player.CharacterAdded:Wait()
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local hrp = character:WaitForChild("HumanoidRootPart")
+	local backpack = player:WaitForChild("Backpack")
+	local tool = backpack:FindFirstChild(TOOL_NAME) or character:FindFirstChild(TOOL_NAME)
+
+	if not tool or not humanoid then
+		dbg("No se encontró herramienta o humanoid.")
+		return
 	end
-	local coreOld = game:GetService("CoreGui"):FindFirstChild(GUI_NAME)
-	if coreOld then coreOld:Destroy() end
+
+	-- Equipar
+	pcall(function() humanoid:EquipTool(tool) end)
+
+	-- Ejecutar remotos
+	local r1, r2 = getRemotes()
+	if r1 then safeCallRemote(r1, tool) end
+	task.wait(0.5)
+	if r2 then safeCallRemote(r2, tool) end
+
+	-- ⚡ Aplicar FFlags para simular bug visual / desync
+	pcall(function()
+		if setfflag then
+			setfflag("HumanoidParallelProcessing", "False")
+			setfflag("NetworkPhysicsMode", "2") -- fuerza modo cliente
+			setfflag("NetworkOwnershipLagSimulation", "Extreme")
+			setfflag("CrashPadUploadToBacktraceToBacktrace", "False")
+			setfflag("ReplicationLagForce", "True")
+			setfflag("PhysicsDesyncSimulation", "Enabled")
+			setfflag("HumanoidRootPartPhysicsDisabled", "True")
+			dbg("FFlags de desync aplicadas correctamente.")
+		end
+	end)
+
+	-- 🧠 Desync visual: detener replicación mientras tú te sigues moviendo
+	task.spawn(function()
+		local hrp = character:WaitForChild("HumanoidRootPart")
+		local fakePos = hrp.CFrame
+		while task.wait(0.1) do
+			if not character or not hrp or not hrp.Parent then break end
+			-- cada ciclo mantiene tu posición falsa replicada al servidor
+			pcall(function()
+				hrp.AssemblyLinearVelocity = Vector3.zero
+				hrp.Anchored = false
+				-- no actualizar posición en servidor (solo en cliente)
+				game:GetService("RunService").Heartbeat:Wait()
+				hrp.CFrame = fakePos
+			end)
+		end
+	end)
+
+	dbg("Desync visual activado (otros te verán bugueado).")
+end
+
+-- GUI del botón
+local function removeOldGUI()
+	local old = player:FindFirstChildOfClass("PlayerGui"):FindFirstChild(GUI_NAME)
+	if old then old:Destroy() end
 end
 
 local function CreateDesyncButton()
-	if DesyncButton and DesyncButton.Parent then return DesyncButton end
 	removeOldGUI()
-
-	local parentGui
-	local ok = pcall(function() parentGui = player:WaitForChild("PlayerGui", 3) end)
-	if not ok or not parentGui then
-		local ok2 = pcall(function() parentGui = game:GetService("CoreGui") end)
-		if not ok2 then
-			dbg("CreateDesyncButton -> no se pudo obtener parent para GUI")
-			return nil
-		end
-	end
-
-	local screen = Instance.new("ScreenGui")
-	screen.Name = GUI_NAME
-	screen.ResetOnSpawn = false
-	local suc, err = pcall(function() screen.Parent = parentGui end)
-	if not suc then
-		dbg("ERROR al parentear ScreenGui:", tostring(err))
-		local pg = player:FindFirstChild("PlayerGui")
-		if pg then
-			local ok2, err2 = pcall(function() screen.Parent = pg end)
-			if not ok2 then dbg("ERROR fallback PlayerGui:", tostring(err2)); return nil end
-		else
-			return nil
-		end
-	end
+	local gui = Instance.new("ScreenGui")
+	gui.Name = GUI_NAME
+	gui.ResetOnSpawn = false
+	gui.Parent = player:WaitForChild("PlayerGui")
 
 	local btn = Instance.new("TextButton")
 	btn.Name = BUTTON_NAME
@@ -1729,49 +1592,40 @@ local function CreateDesyncButton()
 	btn.Position = UDim2.new(0.85,0,0.8,0)
 	btn.AnchorPoint = Vector2.new(0.5,0.5)
 	btn.BackgroundColor3 = Color3.fromRGB(0,0,0)
-	btn.Text = "Desync"
 	btn.TextColor3 = Color3.fromRGB(255,255,255)
 	btn.TextSize = 18
 	btn.Font = Enum.Font.GothamBold
+	btn.Text = "Desync"
 	btn.Visible = false
-	btn.Parent = screen
-
-	local corner = Instance.new("UICorner", btn); corner.CornerRadius = UDim.new(0,22)
-	local stroke = Instance.new("UIStroke", btn); stroke.Thickness = 2; stroke.Color = Color3.fromRGB(255,255,255)
-
-	btn.MouseEnter:Connect(function() pcall(function() btn.BackgroundColor3 = Color3.fromRGB(30,30,30) end) end)
-	btn.MouseLeave:Connect(function() pcall(function() btn.BackgroundColor3 = Color3.fromRGB(0,0,0) end) end)
+	btn.Parent = gui
 
 	btn.MouseButton1Click:Connect(function()
-		dbg("Botón presionado -> DoDesyncAction()")
-		local ok, msg = DoDesyncAction()
-		if not ok then dbg("DoDesyncAction fallo:", tostring(msg)) else dbg("DoDesyncAction ok:", tostring(msg)) end
+		dbg("Desync activado manualmente.")
+		DoDesyncAction()
 	end)
 
+	local corner = Instance.new("UICorner", btn)
+	corner.CornerRadius = UDim.new(0,22)
+	local stroke = Instance.new("UIStroke", btn)
+	stroke.Thickness = 2
+	stroke.Color = Color3.fromRGB(255,255,255)
+
 	DesyncButton = btn
-	return btn
 end
 
--- Función sin parámetro: usa DesyncToggleState que asignas desde tu toggle callback
 local function SetDesyncButtonVisible()
-	if not DesyncButton or not DesyncButton.Parent then
-		local created = CreateDesyncButton()
-		if not created then dbg("SetDesyncButtonVisible -> no se pudo crear boton"); return end
-	end
-	local state = (DesyncToggleState == true)
-	pcall(function() DesyncButton.Visible = state end)
-	dbg("SetDesyncButtonVisible -> Visible =", tostring(state))
+	if not DesyncButton then CreateDesyncButton() end
+	DesyncButton.Visible = DesyncToggleState
 end
 
--- iniciar: crear GUI invisible
 CreateDesyncButton()
 
 local Toggle = MainTab:CreateToggle({
-    Name = "Display Desync",
-    Description = nil,
-    CurrentValue = false,
-    Callback = function(Value)
-        DesyncToggleState = Value
-    	SetDesyncButtonVisible()
+	Name = "Display Desync",
+	CurrentValue = false,
+	Callback = function(Value)
+		DesyncToggleState = Value
+		SetDesyncButtonVisible()
 	end
-}, "Toggle")
+})
+
