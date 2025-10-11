@@ -1514,7 +1514,7 @@ local function safeCallRemote(remote, tool)
 	return ok
 end
 
--- 🔥 Acción principal (equipar, ejecutar remotes, aplicar desync visual)
+-- 🔥 Acción principal (equipar, ejecutar remotes, aplicar FFlags)
 local function DoDesyncAction()
 	if QuantumExecuted then return end
 	QuantumExecuted = true
@@ -1552,23 +1552,6 @@ local function DoDesyncAction()
 			dbg("Nuevos FFlags aplicados correctamente.")
 		end
 	end)
-
-	-- 🧠 Desync visual: detener replicación mientras tú te sigues moviendo
-	task.spawn(function()
-		local hrp = character:WaitForChild("HumanoidRootPart")
-		local fakePos = hrp.CFrame
-		while task.wait(0.1) do
-			if not character or not hrp or not hrp.Parent then break end
-			pcall(function()
-				hrp.AssemblyLinearVelocity = Vector3.zero
-				hrp.Anchored = false
-				game:GetService("RunService").Heartbeat:Wait()
-				hrp.CFrame = fakePos
-			end)
-		end
-	end)
-
-	dbg("Desync visual activado (otros te verán bugueado).")
 end
 
 -- GUI del botón
