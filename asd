@@ -1542,14 +1542,13 @@ local function DoDesyncAction()
 	-- ⚡ Aplicar nuevos FFlags personalizados
 	pcall(function()
 		if setfflag then
-			setfflag("DFFlagPlayerHumanoidPropertyUpdateRestrict", "False")
-			setfflag("DFIntDebugDefaultTargetWorldStepsPerFrame", "-2147483648")
-			setfflag("DFIntMaxMissedWorldStepsRemembered", "-2147483648")
-			setfflag("DFIntWorldStepsOffsetAdjustRate", "2147483648")
-			setfflag("DFIntDebugSendDistInSteps", "-2147483648")
-			setfflag("DFIntWorldStepMax", "-2147483648")
-			setfflag("DFIntWarpFactor", "2147483648")
-			dbg("Nuevos FFlags aplicados correctamente.")
+			setfflag("FFlagSimIslandizerManager", "false")
+			setfflag("DFIntS2PhysicsSenderRate", "1")
+			setfflag("DFFlagDebugVisualizationImprovements", "True")
+			setfflag("DFFlagDebugVisualizeAllPropertyChanges", "True")
+			setfflag("DFFlagDebugVisualizerTrackRotationPredictions", "True")
+			setfflag("DFFlagDebugEnableInterpolationVisualizer", "True")
+			print("✅ FFlags aplicados correctamente.")
 		end
 	end)
 end
@@ -1602,7 +1601,7 @@ end
 CreateDesyncButton()
 
 local Toggle = MainTab:CreateToggle({
-	Name = "Display Desync",
+	Name = "Display Desync v1",
 	CurrentValue = false,
 	Callback = function(Value)
 		DesyncToggleState = Value
