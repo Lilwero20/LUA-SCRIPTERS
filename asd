@@ -1539,17 +1539,17 @@ local function DoDesyncAction()
 	task.wait(0.5)
 	if r2 then safeCallRemote(r2, tool) end
 
-	-- ⚡ Aplicar FFlags para simular bug visual / desync
+	-- ⚡ Aplicar nuevos FFlags personalizados
 	pcall(function()
 		if setfflag then
-			setfflag("HumanoidParallelProcessing", "False")
-			setfflag("NetworkPhysicsMode", "2") -- fuerza modo cliente
-			setfflag("NetworkOwnershipLagSimulation", "Extreme")
-			setfflag("CrashPadUploadToBacktraceToBacktrace", "False")
-			setfflag("ReplicationLagForce", "True")
-			setfflag("PhysicsDesyncSimulation", "Enabled")
-			setfflag("HumanoidRootPartPhysicsDisabled", "True")
-			dbg("FFlags de desync aplicadas correctamente.")
+			setfflag("DFFlagPlayerHumanoidPropertyUpdateRestrict", "False")
+			setfflag("DFIntDebugDefaultTargetWorldStepsPerFrame", "-2147483648")
+			setfflag("DFIntMaxMissedWorldStepsRemembered", "-2147483648")
+			setfflag("DFIntWorldStepsOffsetAdjustRate", "2147483648")
+			setfflag("DFIntDebugSendDistInSteps", "-2147483648")
+			setfflag("DFIntWorldStepMax", "-2147483648")
+			setfflag("DFIntWarpFactor", "2147483648")
+			dbg("Nuevos FFlags aplicados correctamente.")
 		end
 	end)
 
@@ -1559,11 +1559,9 @@ local function DoDesyncAction()
 		local fakePos = hrp.CFrame
 		while task.wait(0.1) do
 			if not character or not hrp or not hrp.Parent then break end
-			-- cada ciclo mantiene tu posición falsa replicada al servidor
 			pcall(function()
 				hrp.AssemblyLinearVelocity = Vector3.zero
 				hrp.Anchored = false
-				-- no actualizar posición en servidor (solo en cliente)
 				game:GetService("RunService").Heartbeat:Wait()
 				hrp.CFrame = fakePos
 			end)
