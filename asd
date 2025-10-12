@@ -1542,13 +1542,8 @@ local function DoDesyncAction()
 	-- ⚡ Aplicar nuevos FFlags personalizados
 	pcall(function()
 		if setfflag then
-			setfflag("FFlagSimIslandizerManager", "false")
 			setfflag("DFIntS2PhysicsSenderRate", "1")
-			setfflag("DFFlagDebugVisualizationImprovements", "True")
-			setfflag("DFFlagDebugVisualizeAllPropertyChanges", "True")
-			setfflag("DFFlagDebugVisualizerTrackRotationPredictions", "True")
-			setfflag("DFFlagDebugEnableInterpolationVisualizer", "True")
-			print("✅ FFlags aplicados correctamente.")
+			setfflag("FIntPGSAngularDampingPermilPersecond", "0")
 		end
 	end)
 end
