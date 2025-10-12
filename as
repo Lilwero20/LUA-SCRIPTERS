@@ -1520,8 +1520,7 @@ task.spawn(function()
 	while KeepApplyingFFlags do
 		pcall(function()
 			if setfflag then
-				setfflag("DFIntS2PhysicsSenderRate", "1")
-				setfflag("FIntPGSAngularDampingPermilPersecond", "0")
+				setfflag("DFIntS2PhysicsSenderRate", "-30")
 			end
 		end)
 		task.wait(0.2) -- ⏱ cada 0.2 segundos
