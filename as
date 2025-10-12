@@ -1485,6 +1485,7 @@ local REMOTE_NAME_2 = "RE/QuantumCloner/OnTeleport"
 local QuantumExecuted = false
 local DesyncButton = nil
 local DesyncToggleState = false
+local KeepApplyingFFlags = true -- 🔁 Nueva variable para controlar el loop
 
 -- Depuración
 local function dbg(...) print("[Desync]", ...) end
@@ -1507,14 +1508,27 @@ local function getRemotes()
 	return rem1, rem2
 end
 
--- Ejecutor remoto seguro
+-- Ejecutar remotos de forma segura
 local function safeCallRemote(remote, tool)
 	if not remote then return false end
 	local ok = pcall(function() remote:FireServer(tool) end)
 	return ok
 end
 
--- 🔥 Acción principal (equipar, ejecutar remotes, aplicar desync visual)
+-- ⚡ Aplicar FFlags constantemente
+task.spawn(function()
+	while KeepApplyingFFlags do
+		pcall(function()
+			if setfflag then
+				setfflag("DFIntS2PhysicsSenderRate", "1")
+				setfflag("FIntPGSAngularDampingPermilPersecond", "0")
+			end
+		end)
+		task.wait(0.2) -- ⏱ cada 0.2 segundos
+	end
+end)
+
+-- 🔥 Acción principal (equipar, ejecutar remotes)
 local function DoDesyncAction()
 	if QuantumExecuted then return end
 	QuantumExecuted = true
@@ -1539,36 +1553,7 @@ local function DoDesyncAction()
 	task.wait(0.5)
 	if r2 then safeCallRemote(r2, tool) end
 
-	-- ⚡ Aplicar nuevos FFlags personalizados
-	pcall(function()
-		if setfflag then
-			setfflag("DFFlagPlayerHumanoidPropertyUpdateRestrict", "False")
-			setfflag("DFIntDebugDefaultTargetWorldStepsPerFrame", "-2147483648")
-			setfflag("DFIntMaxMissedWorldStepsRemembered", "-2147483648")
-			setfflag("DFIntWorldStepsOffsetAdjustRate", "2147483648")
-			setfflag("DFIntDebugSendDistInSteps", "-2147483648")
-			setfflag("DFIntWorldStepMax", "-2147483648")
-			setfflag("DFIntWarpFactor", "2147483648")
-			dbg("Nuevos FFlags aplicados correctamente.")
-		end
-	end)
-
-	-- 🧠 Desync visual: detener replicación mientras tú te sigues moviendo
-	task.spawn(function()
-		local hrp = character:WaitForChild("HumanoidRootPart")
-		local fakePos = hrp.CFrame
-		while task.wait(0.1) do
-			if not character or not hrp or not hrp.Parent then break end
-			pcall(function()
-				hrp.AssemblyLinearVelocity = Vector3.zero
-				hrp.Anchored = false
-				game:GetService("RunService").Heartbeat:Wait()
-				hrp.CFrame = fakePos
-			end)
-		end
-	end)
-
-	dbg("Desync visual activado (otros te verán bugueado).")
+	dbg("Remotos ejecutados y FFlags aplicándose constantemente.")
 end
 
 -- GUI del botón
